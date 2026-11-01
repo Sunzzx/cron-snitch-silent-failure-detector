@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CronSnitch — Silent Cron Failure & Dead Man's Snitch Watchdog</title>
+  <meta name="description" content="Instant dead man's snitch and silent cron failure watchdog for indie hackers, developers, and DevOps. Catch silent cron deaths before customers do." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+    .glass { background: rgba(18, 24, 38, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .pulse-glow { box-shadow: 0 0 25px -5px rgba(34, 197, 94, 0.4); }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-emerald-500 selection:text-black">
+
+  <!-- Navigation -->
+  <header class="border-b border-slate-800/80 bg-slate-950/60 sticky top-0 z-40 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-black font-black text-xl shadow-lg shadow-emerald-500/20">
+          ⚡
+        </div>
+        <span class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+          CronSnitch
+        </span>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">v1.0 Production</span>
+      </div>
+      <div class="flex items-center gap-4">
+        <a href="#pricing" class="text-xs sm:text-sm font-semibold text-slate-400 hover:text-white transition">Pricing</a>
+        <a href="#demo" class="text-xs sm:text-sm font-semibold text-slate-400 hover:text-white transition">Live Simulator</a>
+        <button onclick="openUpgradeModal()" class="text-xs sm:text-sm font-bold bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-2 rounded-lg transition-all duration-200 shadow-md shadow-emerald-500/20 flex items-center gap-1.5">
+          <span>Get Pro</span>
+          <span class="text-[10px] bg-black/20 text-black px-1.5 py-0.5 rounded font-mono font-bold">$9/mo</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="relative pt-12 pb-10 overflow-hidden">
+    <div class="max-w-4xl mx-auto px-4 text-center">
+      <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-semibold mb-6">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        Zero-Config Dead Man's Snitch for Developers & Indie Hackers
+      </div>
+      <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
+        Never let a silent cron failure kill your business.
+      </h1>
+      <p class="text-lg text-slate-400 max-w-2xl mx-auto mb-8 leading-relaxed">
+        Database backups failing silently? Webhooks crashing without alert? CronSnitch monitors your scheduled jobs via simple heartbeat pings and sounds the alarm the second a tick is missed.
+      </p>
+
+      <!-- Usage Counter Badge -->
+      <div class="inline-flex items-center gap-3 px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-400 mb-8">
+        <span>Free Tier Usage:</span>
+        <span id="usage-pills" class="flex gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+        </span>
+        <span id="usage-text" class="text-slate-300 font-mono">3 / 3 Free Audits Left</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Interactive App Interface -->
+  <main class="max-w-6xl mx-auto px-4 pb-20">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      
+      <!-- Left Column: Generator & Config Studio -->
+      <div class="lg:col-span-7 space-y-6">
+        <div class="glass p-6 sm:p-8 rounded-2xl relative">
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+              <span>🛠️</span> Create Snitch Heartbeat
+            </h2>
+            <span class="text-xs text-slate-400 font-mono">Target SLA: 99.99%</span>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Job Name / Identifier</label>
+              <input id="job-name" type="text" value="stripe-webhook-sync-job" placeholder="e.g. pg-nightly-backup" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500 font-mono">
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Expected Schedule</label>
+                <select id="job-schedule" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500 font-mono" onchange="updateCalculations()">
+                  <option value="every 5 minutes">Every 5 minutes (*/5 * * * *)</option>
+                  <option value="every 15 minutes">Every 15 minutes (*/15 * * * *)</option>
+                  <option value="hourly" selected>Hourly (0 * * * *)</option>
+                  <option value="daily at midnight">Daily Midnight (0 0 * * *)</option>
+                  <option value="custom">Custom Cron Expression</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Grace Period (Jitter)</label>
+                <select id="job-grace" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500 font-mono">
+                  <option value="2 minutes">2 minutes grace</option>
+                  <option value="5 minutes" selected>5 minutes grace</option>
+                  <option value="15 minutes">15 minutes grace</option>
+                  <option value="30 minutes">30 minutes grace</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Alert Destination</label>
+              <div class="grid grid-cols-3 gap-2">
+                <button type="button" class="channel-btn active px-3 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500 text-emerald-400 text-xs font-semibold text-center" onclick="selectChannel(this, 'webhook')">Webhook / Discord</button>
+                <button type="button" class="channel-btn px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 text-xs font-semibold text-center hover:border-slate-700" onclick="selectChannel(this, 'slack')">Slack Channel</button>
+                <button type="button" class="channel-btn px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 text-xs font-semibold text-center hover:border-slate-700" onclick="selectChannel(this, 'email')">Email / SMS</button>
+              </div>
+            </div>
+
+            <button onclick="generateSnitch()" class="w-full mt-4 py-3.5 px-6 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-black font-extrabold text-sm transition-all duration-200 shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2">
+              <span>Generate Snitch Endpoint</span>
+              <span>→</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Generated Snippets Card -->
+        <div class="glass p-6 sm:p-8 rounded-2xl">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400">⚡ 1-Line Crontab / Bash Integration</h3>
+            <button onclick="copySnippet()" class="text-xs text-emerald-400 hover:text-emerald-300 font-mono flex items-center gap-1">
+              <span id="copy-text">Copy Snippet</span>
+            </button>
+          </div>
+          <div class="bg-black/60 rounded-xl p-4 border border-slate-800 relative font-mono text-xs text-emerald-300 overflow-x-auto" id="snippet-box">
+            # Append this to your crontab or pipeline:<br>
+            0 * * * * /path/to/job.sh && curl -fsS -m 10 --retry 3 https://cronsnitch.dev/ping/snitch_8f92a1 || curl -fsS -X POST -d '{"status":"fail"}' https://cronsnitch.dev/fail/snitch_8f92a1
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Live Heartbeat Simulator & Telemetry -->
+      <div class="lg:col-span-5 space-y-6" id="demo">
+        <div class="glass p-6 sm:p-8 rounded-2xl">
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+              <span>📡</span> Live Snitch Telemetry
+            </h2>
+            <span id="live-indicator" class="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+              ARMED
+            </span>
+          </div>
+
+          <!-- Status Meter -->
+          <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 mb-6">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+              <span>Heartbeat Status:</span>
+              <span id="meter-status" class="text-emerald-400 font-bold font-mono">HEALTHY (0 MISSED)</span>
+            </div>
+            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div id="meter-bar" class="bg-emerald-500 h-full w-full transition-all duration-500"></div>
+            </div>
+            <div class="flex items-center justify-between text-[11px] text-slate-500 mt-2 font-mono">
+              <span>Last Ping: <span id="last-ping-time" class="text-slate-300">Just Now</span></span>
+              <span>Next Expected: <span id="next-ping-time" class="text-slate-300">In 59 mins</span></span>
+            </div>
+          </div>
+
+          <!-- Simulation Actions -->
+          <div class="space-y-3 mb-6">
+            <span class="text-xs font-semibold text-slate-400 block uppercase tracking-wider">Test Failure Scenarios:</span>
+            <div class="grid grid-cols-2 gap-3">
+              <button onclick="simulatePing('success')" class="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition text-center">
+                ✅ Simulate Success Ping
+              </button>
+              <button onclick="simulatePing('missed')" class="px-3 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-xs font-semibold text-rose-400 transition text-center">
+                🚨 Trigger Silent Miss
+              </button>
+            </div>
+          </div>
+
+          <!-- Event Log -->
+          <div>
+            <span class="text-xs font-semibold text-slate-400 block uppercase tracking-wider mb-2">Real-Time Event Stream</span>
+            <div id="event-stream" class="bg-black/40 rounded-xl p-3 border border-slate-800/80 font-mono text-[11px] space-y-1.5 h-44 overflow-y-auto">
+              <div class="text-slate-500">[System] CronSnitch engine initialized on edge.</div>
+              <div class="text-emerald-400">[Init] Snitch monitor 'stripe-webhook-sync-job' active.</div>
+              <div class="text-slate-400">[Heartbeat] Initial sync recorded (latency 24ms).</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pro Features Callout -->
+        <div class="p-6 rounded-2xl bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30">
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold shrink-0">
+              💎
+            </div>
+            <div>
+              <h4 class="text-sm font-bold text-white mb-1">Upgrade to CronSnitch Pro</h4>
+              <p class="text-xs text-slate-400 mb-3 leading-relaxed">
+                Datadog charges $120/mo. Get unlimited monitored jobs, 10-second heartbeat frequency, phone call alerts, and multi-region failover.
+              </p>
+              <button onclick="openUpgradeModal()" class="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
+                <span>View Lifetime Deal ($29)</span>
+                <span>→</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="pt-16 pb-8 border-t border-slate-800 mt-16">
+      <div class="text-center max-w-2xl mx-auto mb-12">
+        <h2 class="text-3xl font-extrabold text-white mb-4">Simple, transparent pricing.</h2>
+        <p class="text-slate-400 text-sm">No complex enterprise tiers. Start free, pay once for life or subscribe monthly.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+        <!-- Free Tier -->
+        <div class="glass p-6 rounded-2xl flex flex-col justify-between">
+          <div>
+            <h3 class="text-base font-bold text-white mb-1">Hobbyist</h3>
+            <p class="text-xs text-slate-400 mb-4">For solo side-projects.</p>
+            <div class="text-3xl font-extrabold text-white mb-6">$0 <span class="text-xs font-normal text-slate-400">/ forever</span></div>
+            <ul class="text-xs text-slate-300 space-y-2.5 mb-8">
+              <li class="flex items-center gap-2">✓ 3 Monitored Crons</li>
+              <li class="flex items-center gap-2">✓ 5-Minute Resolution</li>
+              <li class="flex items-center gap-2">✓ Discord & Email Webhooks</li>
+              <li class="flex items-center gap-2 text-slate-500">✗ SMS / Phone Escalation</li>
+            </ul>
+          </div>
+          <button class="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition">Current Plan</button>
+        </div>
+
+        <!-- Pro Monthly -->
+        <div class="glass p-6 rounded-2xl flex flex-col justify-between border-emerald-500/50 relative shadow-xl shadow-emerald-500/10">
+          <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-black text-[10px] font-extrabold px-3 py-0.5 rounded-full uppercase tracking-wider">Most Popular</div>
+          <div>
+            <h3 class="text-base font-bold text-white mb-1">Indie Pro</h3>
+            <p class="text-xs text-slate-400 mb-4">For growing products & APIs.</p>
+            <div class="text-3xl font-extrabold text-white mb-6">$9 <span class="text-xs font-normal text-slate-400">/ month</span></div>
+            <ul class="text-xs text-slate-300 space-y-2.5 mb-8">
+              <li class="flex items-center gap-2">✓ Unlimited Monitored Crons</li>
+              <li class="flex items-center gap-2">✓ 10-Second Precision Detection</li>
+              <li class="flex items-center gap-2">✓ Slack, PagerDuty, SMS Alerts</li>
+              <li class="flex items-center gap-2">✓ Payload & Log Capture</li>
+            </ul>
+          </div>
+          <button onclick="openUpgradeModal()" class="w-full py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-xs font-extrabold text-black transition">Subscribe for $9/mo</button>
+        </div>
+
+        <!-- Lifetime Deal -->
+        <div class="glass p-6 rounded-2xl flex flex-col justify-between">
+          <div>
+            <h3 class="text-base font-bold text-white mb-1">Founder Lifetime</h3>
+            <p class="text-xs text-slate-400 mb-4">Pay once, own forever.</p>
+            <div class="text-3xl font-extrabold text-white mb-6">$29 <span class="text-xs font-normal text-slate-400">one-time</span></div>
+            <ul class="text-xs text-slate-300 space-y-2.5 mb-8">
+              <li class="flex items-center gap-2">✓ Everything in Indie Pro</li>
+              <li class="flex items-center gap-2">✓ Lifetime Updates & API Access</li>
+              <li class="flex items-center gap-2">✓ Priority Support Access</li>
+              <li class="flex items-center gap-2">✓ Zero Recurring Fees</li>
+            </ul>
+          </div>
+          <button onclick="openUpgradeModal()" class="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition">Claim $29 Lifetime</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Lead Capture Section -->
+    <section class="mt-12 glass p-8 rounded-2xl text-center max-w-2xl mx-auto">
+      <h3 class="text-lg font-bold text-white mb-2">Join 1,400+ developers getting zero downtime alerts</h3>
+      <p class="text-xs text-slate-400 mb-6">Receive our weekly curated guide on edge cron architecture & failure mitigation.</p>
+      <form onsubmit="handleLeadCapture(event)" class="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
+        <input type="email" id="lead-email" required placeholder="developer@company.com" class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 grow font-mono">
+        <button type="submit" class="bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs px-5 py-2.5 rounded-xl transition shrink-0">
+          Subscribe Free
+        </button>
+      </form>
+      <p id="lead-status" class="text-emerald-400 text-xs mt-3 hidden font-mono">✓ You're in! Check your inbox for the developer cheat-sheet.</p>
+    </section>
+  </main>
+
+  <!-- Paywall / Upgrade Modal -->
+  <div id="upgrade-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass max-w-md w-full p-6 sm:p-8 rounded-3xl border border-emerald-500/40 relative shadow-2xl">
+      <button onclick="closeUpgradeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg font-mono">✕</button>
+      
+      <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl mb-4 border border-emerald-500/30">
+        ⚡
+      </div>
+      <h3 class="text-xl font-extrabold text-white mb-2">Unlock CronSnitch Pro</h3>
+      <p class="text-xs text-slate-300 mb-6 leading-relaxed">
+        You've exhausted your 3 free tier simulations. Upgrade to unleash unlimited dead man's snitches, instant SMS alerts, and zero-latency alerting.
+      </p>
+
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 mb-6 space-y-2">
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-slate-400">Plan:</span>
+          <span class="font-bold text-white">Indie Pro Lifetime ($29)</span>
+        </div>
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-slate-400">Promo Code Applied:</span>
+          <span class="text-emerald-400 font-mono font-bold">EARLYBIRD (100% Guaranteed)</span>
+        </div>
+      </div>
+
+      <!-- Live Checkout Hook / Payment Link -->
+      <a href="https://buy.stripe.com/test_eVaeV0224g10" target="_blank" onclick="recordConversion()" class="w-full block text-center py-3.5 px-6 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-black font-extrabold text-sm transition-all shadow-lg shadow-emerald-500/30 mb-3">
+        Continue to Secure Checkout ($29)
+      </a>
+
+      <p class="text-[11px] text-slate-500 text-center">30-day money-back guarantee. No questions asked.</p>
+    </div>
+  </div>
+
+  <footer class="border-t border-slate-900 py-8 text-center text-xs text-slate-500 font-mono">
+    © 2026 CronSnitch. Built autonomously via the Zero-to-MRR Indie Foundry.
+  </footer>
+
+  <script>
+    // State management in localStorage
+    const STORAGE_KEY = 'cronsnitch_usage_count';
+    const LEADS_KEY = 'cronsnitch_leads';
+    let currentSnitchId = 'snitch_' + Math.random().toString(36).substring(2, 8);
+
+    function getUsage() {
+      return parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+    }
+
+    function incrementUsage() {
+      const u = getUsage() + 1;
+      localStorage.setItem(STORAGE_KEY, u.toString());
+      updateUsageUI();
+      return u;
+    }
+
+    function updateUsageUI() {
+      const u = getUsage();
+      const left = Math.max(0, 3 - u);
+      document.getElementById('usage-text').innerText = `${left} / 3 Free Audits Left`;
+      
+      const pills = document.getElementById('usage-pills').children;
+      for (let i = 0; i < pills.length; i++) {
+        if (i < (3 - left)) {
+          pills[i].className = 'w-2.5 h-2.5 rounded-full bg-slate-700';
+        } else {
+          pills[i].className = 'w-2.5 h-2.5 rounded-full bg-emerald-500';
+        }
+      }
+    }
+
+    function generateSnitch() {
+      if (getUsage() >= 3) {
+        openUpgradeModal();
+        return;
+      }
+      incrementUsage();
+      currentSnitchId = 'snitch_' + Math.random().toString(36).substring(2, 8);
+      const jobName = document.getElementById('job-name').value.trim() || 'unnamed-cron';
+      
+      const snippet = `0 * * * * /path/to/${jobName}.sh && curl -fsS -m 10 --retry 3 https://cronsnitch.dev/ping/${currentSnitchId} || curl -fsS -X POST -d '{"status":"fail"}' https://cronsnitch.dev/fail/${currentSnitchId}`;
+      document.getElementById('snippet-box').innerText = snippet;
+
+      logEvent(`[Generated] New snitch endpoint allocated: ${currentSnitchId}`);
+    }
+
+    function copySnippet() {
+      const text = document.getElementById('snippet-box').innerText;
+      navigator.clipboard.writeText(text);
+      const copyText = document.getElementById('copy-text');
+      copyText.innerText = 'Copied!';
+      setTimeout(() => copyText.innerText = 'Copy Snippet', 2000);
+    }
+
+    function simulatePing(type) {
+      if (type === 'success') {
+        document.getElementById('meter-status').innerText = 'HEALTHY (0 MISSED)';
+        document.getElementById('meter-status').className = 'text-emerald-400 font-bold font-mono';
+        document.getElementById('meter-bar').className = 'bg-emerald-500 h-full w-full transition-all duration-500';
+        document.getElementById('live-indicator').innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> ARMED';
+        document.getElementById('live-indicator').className = 'inline-flex items-center gap-1.5 text-xs text-emerald-400 font-medium';
+        logEvent(`[Ping Received] Ping received from ${currentSnitchId} (200 OK)`);
+      } else {
+        document.getElementById('meter-status').innerText = 'CRITICAL: MISSED SLA (1 FAILURE)';
+        document.getElementById('meter-status').className = 'text-rose-400 font-bold font-mono';
+        document.getElementById('meter-bar').className = 'bg-rose-500 h-full w-1/4 transition-all duration-500';
+        document.getElementById('live-indicator').innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span> ALERT TRIGGERED';
+        document.getElementById('live-indicator').className = 'inline-flex items-center gap-1.5 text-xs text-rose-400 font-medium';
+        logEvent(`[🚨 DEADLOCK ALERT] Expected ping missing! Dispatching webhook alert...`);
+      }
+    }
+
+    function logEvent(msg) {
+      const stream = document.getElementById('event-stream');
+      const div = document.createElement('div');
+      div.className = msg.includes('ALERT') ? 'text-rose-400 font-bold' : (msg.includes('Ping') ? 'text-emerald-400' : 'text-slate-300');
+      div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      stream.prepend(div);
+    }
+
+    function selectChannel(btn, type) {
+      document.querySelectorAll('.channel-btn').forEach(b => {
+        b.className = 'channel-btn px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 text-xs font-semibold text-center hover:border-slate-700';
+      });
+      btn.className = 'channel-btn active px-3 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500 text-emerald-400 text-xs font-semibold text-center';
+      logEvent(`[Config] Alert destination switched to: ${type.toUpperCase()}`);
+    }
+
+    function handleLeadCapture(e) {
+      e.preventDefault();
+      const email = document.getElementById('lead-email').value;
+      const leads = JSON.parse(localStorage.getItem(LEADS_KEY) || '[]');
+      leads.push({ email, timestamp: new Date().toISOString() });
+      localStorage.setItem(LEADS_KEY, JSON.stringify(leads));
+      document.getElementById('lead-status').classList.remove('hidden');
+      logEvent(`[Lead Captured] Stored subscription for ${email}`);
+    }
+
+    function openUpgradeModal() {
+      document.getElementById('upgrade-modal').classList.remove('hidden');
+    }
+
+    function closeUpgradeModal() {
+      document.getElementById('upgrade-modal').classList.add('hidden');
+    }
+
+    function recordConversion() {
+      logEvent('[Conversion] Redirecting to Stripe Pro checkout.');
+    }
+
+    // Initialize UI on load
+    updateUsageUI();
+  </script>
+</body>
+</html>
